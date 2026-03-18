@@ -25,11 +25,15 @@ You just need to modify some company-specific details in the Servidor.js file an
 
 - Alerts and errors when there is no connection with the server
 
-### Images (Reminder: everything is still in progress):
+### Images :
 
-![](https://imgur.com/ELnRd4w.png)
+<p align="left">
 
-![](https://i.imgur.com/I2Xs78l.png)
+<img src="https://imgur.com/ELnRd4w.png" width=30% height=50% style="margin-right: 10px;">
+
+<img src="https://i.imgur.com/I2Xs78l.png" width=30% height=50%>
+
+</p>
 
 All images available at: https://imgur.com/a/cFvz3Oe
 
