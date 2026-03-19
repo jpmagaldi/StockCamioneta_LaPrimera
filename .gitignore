@@ -40,3 +40,4 @@ yarn-error.*
 /ios
 /android
 StockCamioneta_LaPrimera.code-workspace
+Servidor.py

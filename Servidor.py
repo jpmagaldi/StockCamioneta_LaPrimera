@@ -36,7 +36,7 @@ def CrearLogs(self):
 # ------- DATOS PARA AFIP -------
 URL_QR = "https://www.afip.gob.ar/fe/qr/"
 
-CUIT = #AQUI EL CUIT DE LA EMPRESA
+CUIT = 30670206528
 
 cert_dir = resource_path("Certificados")
 
@@ -67,11 +67,11 @@ def conectar_servidor():
     while True:
         try:
             connection = mysql.connector.connect(
-                host=#IP,
+                host='192.168.0.142',
                 port=3306,
-                user=#USUARIO,
-                password=#PASSWORD,
-                database=#NOMBRE DE LA BASE DE DATOS,
+                user='ventas',
+                password='ventas',
+                database='negocio',
                 connection_timeout=5,
             )
             connection.autocommit = False

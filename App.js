@@ -64,7 +64,7 @@ function StockCarga() {
                 }
                 return true;
             } catch (error) {
-                //console.error(`Error en BuscarInicial (intento ${i + 1}):`, error.message);
+                console.error(`Error en BuscarInicial (intento ${i + 1}):`, error.message);
 
                 if (i > 1) {
                     setTextoInfo('Esta tardando mucho, quizas no haya internet o el servidor no responde');
@@ -168,7 +168,6 @@ function StockCarga() {
                 Productos: cargaActual,
                 Tipo: tipoCarga
             })
-
             if (response.data === 'OK') {
                 setModalExito({ 
                     visible: true, 
@@ -181,6 +180,14 @@ function StockCarga() {
                 setCargaActual([]);
                 setCantidad('1');
                 setSeleccionado(null);
+                await BuscarInicial();
+            } else {
+                setModalExito({ 
+                    visible: true, 
+                    title: 'Error de Conexión',
+                    message: 'No se pudo guardar la carga. Verifique su conexión al servidor.', 
+                    type: 'error' 
+                });
             }
             
         } catch (error) {
