@@ -6,6 +6,7 @@ import {
     DataTable, 
     Icon,
     ActivityIndicator,
+    TextInput,
 } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DatePickerInput } from 'react-native-paper-dates';
@@ -29,8 +30,11 @@ export default function Ranking({ navigation, route }) {
     const [dataTabla6, setDataTabla6] = useState([]);
     const [dataTabla7, setDataTabla7] = useState([]);
 
+    const [importeVentas, setImporteVentas] = useState('Cargando...');
+    const [ImporteColor, setImporteColor] = useState('#d37f00');
 
-    const BuscarInfo = async (ptoventaActual) => {
+
+    const BuscarInfo = async () => {
         setLoading(true);
         // Limpiamos datos para forzar re-render visual
         setDataTabla1([])
@@ -41,15 +45,12 @@ export default function Ranking({ navigation, route }) {
         setDataTabla6([])
         setDataTabla7([])
         
-        try { 
-            const pv = ptoventaActual || usePtoventa;
-            
+        try {             
             let response = await apiClient.post(`getStockInfo`, {
                 Fecha: fecha.toISOString().slice(0, 10),
-                PtoVenta: pv
+                PtoVenta: usePtoventa
             })
-                      
-            if (response.data) {
+            if (response.data.error === null) {
                 setDataTabla1(response.data.Tabla1 || [])
                 setDataTabla2(response.data.Tabla2 || [])
                 setDataTabla3(response.data.Tabla3 || [])
@@ -57,10 +58,27 @@ export default function Ranking({ navigation, route }) {
                 setDataTabla5(response.data.Tabla5 || [])
                 setDataTabla6(response.data.Tabla6 || [])
                 setDataTabla7(response.data.Tabla7 || [])
-                setLoading(false);
+                setImporteVentas(response.data.Total)
+                
+                if (response.data.Total !== '0.00') {
+                    const formattedTotal = parseFloat(response.data.Total).toLocaleString('es-AR', { 
+                        minimumFractionDigits: 2, 
+                        maximumFractionDigits: 2 
+                    });
+                    setImporteVentas(`${formattedTotal}`);
+                    setImporteColor('#43a047');
+                } else {
+                    setImporteVentas('0.00');
+                    setImporteColor('#43a047');
+                }               
+            } else {
+                setImporteVentas('ERROR INTERNO');
+                setImporteColor('#8B0000');
             }
-            
+            setLoading(false)
         } catch (e) {
+            setImporteVentas('ERROR INTERNO');
+            setImporteColor('#8B0000');
             console.error('Error en BuscarInfo (Ranking):', e);
         }
     }
@@ -85,7 +103,7 @@ export default function Ranking({ navigation, route }) {
         <Surface style={styles.tableSurface} elevation={1}>
             <View style={styles.sectionHeader}>
                 <Icon source={icono} size={24} color="#9A1115" />
-                <Text variant="titleMedium" style={styles.sectionTitle}>{titulo}</Text>
+                <Text variant="titleMedium" style={styles.sectionTitle} maxFontSizeMultiplier={1.2}>{titulo}</Text>
             </View>
             
             <ScrollView >
@@ -93,21 +111,29 @@ export default function Ranking({ navigation, route }) {
                     <DataTable style={[styles.table, { width: availableWidth }]}>
                        
                         <DataTable.Header style={styles.tableHeader}>
-                            <DataTable.Title style={styles.widthComp} textStyle={styles.headerText}>Producto</DataTable.Title>
-                            <DataTable.Title style={styles.widthTotal} textStyle={styles.headerText}>Cantidad</DataTable.Title>
+                            <DataTable.Title style={styles.widthComp}>
+                                <Text style={styles.headerText} maxFontSizeMultiplier={1.2}>Producto</Text>
+                            </DataTable.Title>
+                            <DataTable.Title style={styles.widthTotal}>
+                                <Text style={styles.headerText} maxFontSizeMultiplier={1.2}>Cantidad</Text>
+                            </DataTable.Title>
                         </DataTable.Header>
 
                         {data.length === 0 ? (
                             <DataTable.Row>
                                 <DataTable.Cell style={{ flex: 1, justifyContent: 'center' }}>
-                                    <Text variant="bodySmall" style={{ color: '#999' }}>Sin datos disponibles</Text>
+                                    <Text variant="bodySmall" style={{ color: '#999' }} maxFontSizeMultiplier={1.2}>Sin datos disponibles</Text>
                                 </DataTable.Cell>
                             </DataTable.Row>
                         ) : (
                             data.map((item, index) => (
                                 <DataTable.Row key={index} style={styles.tableRow}>
-                                    <DataTable.Cell style={styles.widthComp} textStyle={styles.cellText}>{item[0]}</DataTable.Cell>
-                                    <DataTable.Cell style={styles.widthTotal} textStyle={styles.valueText}>{Math.round(parseFloat(item[1]))}</DataTable.Cell>
+                                    <DataTable.Cell style={styles.widthComp}>
+                                        <Text style={styles.cellText} maxFontSizeMultiplier={1.2} numberOfLines={2}>{item[0]}</Text>
+                                    </DataTable.Cell>
+                                    <DataTable.Cell style={styles.widthTotal}>
+                                        <Text style={styles.valueText} maxFontSizeMultiplier={1.2}>{Math.round(parseFloat(item[1]))}</Text>
+                                    </DataTable.Cell>
                                 </DataTable.Row>
                             ))
                         )}
@@ -121,30 +147,42 @@ export default function Ranking({ navigation, route }) {
         <Surface style={styles.tableSurface} elevation={1}>
             <View style={styles.sectionHeader}>
                 <Icon source={icono} size={24} color="#9A1115" />
-                <Text variant="titleMedium" style={styles.sectionTitle}>{titulo}</Text>
+                <Text variant="titleMedium" style={styles.sectionTitle} maxFontSizeMultiplier={1.2}>{titulo}</Text>
             </View>
             
             <ScrollView horizontal={true} showsHorizontalScrollIndicator={true}>
                 <View>
                     <DataTable style={[styles.table, { width: availableWidth * 1.3 }]}>
                         <DataTable.Header style={styles.tableHeader}>
-                            <DataTable.Title style={styles.widthComp} textStyle={styles.headerText}>Producto.</DataTable.Title>
-                            <DataTable.Title style={styles.widthTotalV} textStyle={styles.headerText}>Cantidad</DataTable.Title>
-                            <DataTable.Title style={styles.widthCambio} textStyle={styles.headerText}>Cambios</DataTable.Title>
+                            <DataTable.Title style={styles.widthComp}>
+                                <Text style={styles.headerText} maxFontSizeMultiplier={1.2}>Producto.</Text>
+                            </DataTable.Title>
+                            <DataTable.Title style={styles.widthTotalV}>
+                                <Text style={styles.headerText} maxFontSizeMultiplier={1.2}>Cantidad</Text>
+                            </DataTable.Title>
+                            <DataTable.Title style={styles.widthCambio}>
+                                <Text style={styles.headerText} maxFontSizeMultiplier={1.2}>Cambios</Text>
+                            </DataTable.Title>
                         </DataTable.Header>
 
                         {data.length === 0 ? (
                             <DataTable.Row>
                                 <DataTable.Cell style={{ flex: 1, justifyContent: 'center' }}>
-                                    <Text variant="bodySmall" style={{ color: '#999' }}>Sin datos disponibles</Text>
+                                    <Text variant="bodySmall" style={{ color: '#999' }} maxFontSizeMultiplier={1.2}>Sin datos disponibles</Text>
                                 </DataTable.Cell>
                             </DataTable.Row>
                         ) : (
                             data.map((item, index) => (
                                 <DataTable.Row key={index} style={styles.tableRow}>
-                                    <DataTable.Cell style={styles.widthComp} textStyle={styles.cellText}>{item.Producto}</DataTable.Cell>
-                                    <DataTable.Cell style={styles.widthTotalV} textStyle={styles.valueText}>{Math.round(parseFloat(item.Cantidad_Total))}</DataTable.Cell>
-                                    <DataTable.Cell style={styles.widthCambio} textStyle={styles.valueText}>{Math.round(parseFloat(item.Cambio_Total))}</DataTable.Cell>
+                                    <DataTable.Cell style={styles.widthComp}>
+                                        <Text style={styles.cellText} maxFontSizeMultiplier={1.2} numberOfLines={2}>{item.Producto}</Text>
+                                    </DataTable.Cell>
+                                    <DataTable.Cell style={styles.widthTotalV}>
+                                        <Text style={styles.valueText} maxFontSizeMultiplier={1.2}>{Math.round(parseFloat(item.Cantidad_Total))}</Text>
+                                    </DataTable.Cell>
+                                    <DataTable.Cell style={styles.widthCambio}>
+                                        <Text style={styles.valueText} maxFontSizeMultiplier={1.2}>{Math.round(parseFloat(item.Cambio_Total))}</Text>
+                                    </DataTable.Cell>
                                 </DataTable.Row>
                             ))
                         )}
@@ -162,11 +200,11 @@ export default function Ranking({ navigation, route }) {
                 {/* Header Section */}
                 <View style={styles.headerContainer}>
                     <Icon source="package-variant-closed" size={40} color="#9A1115" />
-                    <Text variant="headlineMedium" style={styles.title}>Control de Stock</Text>
+                    <Text variant="headlineMedium" style={styles.title} maxFontSizeMultiplier={1.2}>Control de Stock</Text>
                     {loading && (
                         <View style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                             <ActivityIndicator size="small" color="#9A1115" />
-                            <Text variant="bodySmall" style={{ color: '#9A1115' }}>Actualizando datos...</Text>
+                            <Text variant="bodySmall" style={{ color: '#9A1115' }} maxFontSizeMultiplier={1.2}>Actualizando datos...</Text>
                         </View>
                     )}
                 </View>
@@ -175,7 +213,7 @@ export default function Ranking({ navigation, route }) {
                 <Surface style={styles.filterSurface} elevation={1}>
                     <View style={styles.sectionHeader}>
                         <Icon source="calendar-month" size={24} color="#9A1115" />
-                        <Text variant="titleMedium" style={styles.sectionTitle}>Selección de Fecha</Text>
+                        <Text variant="titleMedium" style={styles.sectionTitle} maxFontSizeMultiplier={1.2}>Selección de Fecha</Text>
                     </View>
                     <DatePickerInput
                         locale="es"
@@ -246,6 +284,22 @@ export default function Ranking({ navigation, route }) {
                 />
                 ) : null}
 
+                <Surface style={[styles.totalSurface, { backgroundColor: ImporteColor, marginTop: 16 }]} elevation={2}>
+                    <View style={styles.totalHeader}>
+                        <Icon source="currency-usd" size={24} color="#fff" />
+                        <Text variant="titleMedium" style={styles.totalLabel} maxFontSizeMultiplier={1.2}>TOTAL VENTAS</Text>
+                    </View>
+                    <TextInput
+                        mode="flat"
+                        value={importeVentas}
+                        style={styles.totalInput}
+                        textColor="#fff"
+                        underlineColor="transparent"
+                        activeUnderlineColor="transparent"
+                        readOnly
+                    />
+                </Surface>
+
             </ScrollView>
         </SafeAreaView>
     );
@@ -311,7 +365,7 @@ const styles = StyleSheet.create({
     tableRow: {
         borderBottomWidth: 1,
         borderBottomColor: '#f0f0f0',
-        height: 56,
+        minHeight: 56,
     },
     cellText: {
         fontSize: 15,
@@ -340,5 +394,29 @@ const styles = StyleSheet.create({
         width: availableWidth * 0.3,
         flex: 0,
         justifyContent: 'center'
-    }   
+    },
+    totalSurface: {
+        padding: 20,
+        borderRadius: 20,
+        backgroundColor: '#9A1115',
+        marginTop: 8,
+    },
+    totalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 4,
+        gap: 10,
+    },
+    totalLabel: {
+        color: 'rgba(255,255,255,0.8)',
+        fontWeight: 'bold',
+        letterSpacing: 1,
+    },
+    totalInput: {
+        backgroundColor: 'transparent',
+        fontSize: 28,
+        fontWeight: 'bold',
+        height: 50,
+        paddingHorizontal: 0,
+    },
 });

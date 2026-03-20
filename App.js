@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { FlatList, View, StyleSheet, StatusBar } from 'react-native';
+import { FlatList, View, StyleSheet, StatusBar, Text as RNText } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
     Text, 
@@ -24,6 +24,11 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { apiClient } from './store'
 import Configuracion from './Configuracion';
 import Ranking from './Ranking';
+
+// Prevenir que el ajuste de fuente (zoom) del sistema rompa el diseño
+if (RNText.defaultProps == null) RNText.defaultProps = {};
+RNText.defaultProps.maxFontSizeMultiplier = 1.2;
+
 
 const theme = {
     ...DefaultTheme,
@@ -211,12 +216,12 @@ function StockCarga() {
                 rippleColor="rgba(0, 0, 0, .1)"
             >
                 <View style={styles.rowContent}>
-                    <Text style={[styles.rowText, yaCargado && styles.textChecked]}>
+                    <Text style={[styles.rowText, yaCargado && styles.textChecked]} maxFontSizeMultiplier={1.2}>
                         {item.nombre}
                     </Text>
                     {yaCargado && (
                         <Surface style={styles.badge} elevation={1}>
-                            <Text style={styles.badgeText}>{yaCargado.cantidad}</Text>
+                        <Text style={styles.badgeText} maxFontSizeMultiplier={1.2}>{yaCargado.cantidad}</Text>
                         </Surface>
                     )}
                 </View>
@@ -238,13 +243,14 @@ function StockCarga() {
                 <View style={styles.container}>
                     <View style={styles.header}>
                         <View style={styles.titleContainer}>
-                            <Text variant="headlineSmall" style={styles.title}>Stock Camioneta</Text>
+                            <Text variant="headlineSmall" style={styles.title} maxFontSizeMultiplier={1.2}>Stock Camioneta</Text>
                             <Button 
                                 mode="contained" 
                                 onPress={Finalizar} 
                                 disabled={cargaActual.length === 0}
                                 style={styles.btnFinalizar}
                                 contentStyle={{ height: 45 }}
+                                labelStyle={{ maxFontSizeMultiplier: 1.2 }}
                             >
                                 Finalizar
                             </Button>
@@ -267,7 +273,7 @@ function StockCarga() {
                         renderItem={renderItem}
                         ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
                         contentContainerStyle={styles.listContainer}
-                        ListEmptyComponent={<Text style={styles.emptyText}>No se encontraron productos</Text>}
+                    ListEmptyComponent={<Text style={styles.emptyText} maxFontSizeMultiplier={1.2}>No se encontraron productos</Text>}
                     />
 
                     <Portal>
@@ -291,12 +297,12 @@ function StockCarga() {
                                 </View>
                             </View>
 
-                            <Dialog.Title style={{ textAlign: 'center', fontWeight: 'bold', paddingBottom: 0 }}>
+                            <Dialog.Title style={{ textAlign: 'center', fontWeight: 'bold', paddingBottom: 0 }} maxFontSizeMultiplier={1.2}>
                                 Seleccionar Cantidad
                             </Dialog.Title>
                             
                             <Dialog.Content>
-                                <Text variant="bodyLarge" style={{ textAlign: 'center', color: '#555', marginBottom: 20 }}>
+                                <Text variant="bodyLarge" style={{ textAlign: 'center', color: '#555', marginBottom: 20 }} maxFontSizeMultiplier={1.2}>
                                     {seleccionado?.nombre}
                                 </Text>
 
@@ -395,12 +401,12 @@ function StockCarga() {
                                 </View>
                             </View>
                             
-                            <Dialog.Title style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 24, paddingVertical: 10 }}>
+                            <Dialog.Title style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 24, paddingVertical: 10 }} maxFontSizeMultiplier={1.2}>
                                 {modalExito.title}
                             </Dialog.Title>
                             
                             <Dialog.Content>
-                                <Text variant="bodyLarge" style={{ textAlign: 'center', color: '#555', lineHeight: 24 }}>
+                                <Text variant="bodyLarge" style={{ textAlign: 'center', color: '#555', lineHeight: 24 }} maxFontSizeMultiplier={1.2}>
                                     {modalExito.message}
                                 </Text>
                             </Dialog.Content>
@@ -478,10 +484,12 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: 15,
+        gap: 8,
     },
     title: {
         fontWeight: 'bold',
         color: '#1a1a1a',
+        flex: 1, // Esto hace que el título ocupe el espacio sobrante y se divida en líneas si es preciso
     },
     btnFinalizar: {
        borderRadius: 8,
