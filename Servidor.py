@@ -76,6 +76,7 @@ def conectar_servidor():
 				connection_timeout=5,
 			)
 			connection.autocommit = False
+			connection.start_transaction(isolation_level='READ COMMITTED')
 			return(connection)
 			break
 		except Exception:
@@ -461,29 +462,6 @@ def rankingFact():
 
 			total = calculoTotal(Fecha, PtoVta)
 			
-			'''Query = "SELECT SUM(Total) as Total FROM negocio.ventas INNER JOIN camioneta.clientes AS c \
-				ON ventas.Cuit = c.Cuit WHERE Fecha LIKE '%s' AND N_Fact LIKE '%s-%%' \
-				AND c.Duplicado NOT LIKE '1'" % (Fecha, PtoVta)
-			cursor.execute(Query)
-			rows3 = cursor.fetchone()
-
-			Query1 = "SELECT SUM(Total) as Total FROM negocio.presupuestos WHERE Fecha LIKE '%s' AND \
-				N_Presu LIKE '%s-%%'" % (Fecha, PtoVta)
-			cursor.execute(Query1)
-			rows4 = cursor.fetchone()
-
-		try:
-			if rows3['Total'] and rows4['Total']:
-				total = round(float(rows3['Total']) + float(rows4['Total']), 2)
-			elif rows3['Total']:
-				total = round(float(rows3['Total']), 2)
-			elif rows4['Total']:
-				total = round(float(rows4['Total']), 2)
-			else:
-				total = '0.00'
-		except:
-			return jsonify({'error': 'Error interno'})'''
-			
 		return jsonify({'error': None, 'rowF' : rowF, 'rowP' : rows2, 'total' : total})
 	except Exception as e:
 		CrearLogs(e)
@@ -577,7 +555,6 @@ def getStockInfo():
 		Tabla5 = [[nombre, round(cantidad, 4)] for nombre, cantidad in stock_map.items()]
 
 		total = calculoTotal(Fecha, PtoVenta)
-		print(total)
 		return jsonify({
 			'error': None,
 			'Tabla1' : Tabla1, 
@@ -820,5 +797,5 @@ def buscar_productos():
 
 
 if __name__ == "__main__":
-	app.run(host='0.0.0.0', port=5000, debug=True) #Para testing
-	#serve(app, host='0.0.0.0', port=5000) #Para produccion
+	#app.run(host='0.0.0.0', port=5000, debug=True) #Para testing
+	serve(app, host='0.0.0.0', port=5000) #Para produccion

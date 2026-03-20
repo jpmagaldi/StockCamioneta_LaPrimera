@@ -173,7 +173,7 @@ function StockCarga() {
                 Productos: cargaActual,
                 Tipo: tipoCarga
             })
-            if (response.data === 'OK') {
+            if (response.data.error === null) {
                 setModalExito({ 
                     visible: true, 
                     title: '¡Carga Exitosa!',
@@ -187,10 +187,11 @@ function StockCarga() {
                 setSeleccionado(null);
                 await BuscarInicial();
             } else {
+                console.log(response.data)
                 setModalExito({ 
                     visible: true, 
                     title: 'Error de Conexión',
-                    message: 'No se pudo guardar la carga. Verifique su conexión al servidor.', 
+                    message: response.data.error, 
                     type: 'error' 
                 });
             }

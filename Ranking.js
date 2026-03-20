@@ -132,7 +132,7 @@ export default function Ranking({ navigation, route }) {
                                         <Text style={styles.cellText} maxFontSizeMultiplier={1.2} numberOfLines={2}>{item[0]}</Text>
                                     </DataTable.Cell>
                                     <DataTable.Cell style={styles.widthTotal}>
-                                        <Text style={styles.valueText} maxFontSizeMultiplier={1.2}>{Math.round(parseFloat(item[1]))}</Text>
+                                        <Text style={styles.valueText} maxFontSizeMultiplier={1.2}>{Math.round(parseFloat(item[1]) * 10) / 10}</Text>
                                     </DataTable.Cell>
                                 </DataTable.Row>
                             ))
@@ -178,10 +178,10 @@ export default function Ranking({ navigation, route }) {
                                         <Text style={styles.cellText} maxFontSizeMultiplier={1.2} numberOfLines={2}>{item.Producto}</Text>
                                     </DataTable.Cell>
                                     <DataTable.Cell style={styles.widthTotalV}>
-                                        <Text style={styles.valueText} maxFontSizeMultiplier={1.2}>{Math.round(parseFloat(item.Cantidad_Total))}</Text>
+                                        <Text style={styles.valueText} maxFontSizeMultiplier={1.2}>{Math.round(parseFloat(item.Cantidad_Total) * 10) / 10}</Text>
                                     </DataTable.Cell>
                                     <DataTable.Cell style={styles.widthCambio}>
-                                        <Text style={styles.valueText} maxFontSizeMultiplier={1.2}>{Math.round(parseFloat(item.Cambio_Total))}</Text>
+                                        <Text style={styles.valueText} maxFontSizeMultiplier={1.2}>{Math.round(parseFloat(item.Cambio_Total) * 10) / 10}</Text>
                                     </DataTable.Cell>
                                 </DataTable.Row>
                             ))
