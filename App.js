@@ -60,7 +60,7 @@ function StockCarga() {
         for (let i = 0; i < maxIntentos; i++) {
             try {
                 let response = await apiClient.get(`searchInicio`, { timeout: 2000 });
-                if (response.data === 'OK') {
+                if (response.data.error === null) {
                     setBotonInicio(true);
                     setTipoCarga('2');
                 } else {
