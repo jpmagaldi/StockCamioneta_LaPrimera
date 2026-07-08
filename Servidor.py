@@ -1,16 +1,28 @@
-from logging import debug
+import logging
 import sys, os
 import time
 from flask import Flask, request, jsonify
 import mysql.connector
 import qrcode
 import base64
+from pathlib import Path
 import io
 from datetime import datetime, timedelta
 from Afip.wsaa import WSAA
 from Afip.wsfev1 import WSFEv1
 from waitress import serve
 import traceback
+
+
+# ------- DATOS GENERALES -------
+logger = logging.getLogger('waitress')
+logger.setLevel(logging.DEBUG)
+
+DATE = datetime.now().strftime("%Y%m%d")
+DATE1 = datetime.now().strftime("%Y-%m-%d")
+
+base_dir = Path.home() / 'La_Primera_Software'
+base_dir.mkdir(parents=True, exist_ok=True)
 
 
 def resource_path(relative_path):
@@ -21,7 +33,7 @@ def resource_path(relative_path):
 
 def CrearLogs(self):
 	""" Crea o agrega a un logs.txt (en carpeta raíz) la informacion del error """
-	f = open(resource_path("logs.txt"), "a")
+	f = open(base_dir / 'logs.txt', "a")
 	f.write(datetime.now().strftime("%d/%m/%Y") + ':' + '\n')
 	for i in sys.exc_info():
 		f.write(str(i) + '\n')
@@ -29,73 +41,76 @@ def CrearLogs(self):
 	f.write(traceback.format_exc())
 	f.write('------------' + '\n')
 	f.close()
-	return
 
 
 
 # ------- DATOS PARA AFIP -------
 URL_QR = "https://www.afip.gob.ar/fe/qr/"
 
-CUIT = 30670206528
 
-cert_dir = resource_path("Certificados")
-
-WSAa = WSAA()
-WSFEv1 = WSFEv1()
+CUIT = None
+Produccion = True
 
 
-CRT = cert_dir + '\\productioncrt.crt'
-KEY = cert_dir + '\\privada.key'
+class ConnectionManager:
+	def __init__(self):
+		global CUIT
+		self.db = None
+		self.wsaa = WSAA()
+		self.wsfe = WSFEv1()
+		
+		cert_dir = base_dir / 'Certificados'
+		
+		if Produccion:
+			self.wsfe.Cuit = CUIT = 30670206528
+			self.cert = str(cert_dir / 'productioncrt.crt')
+			self.key = str(cert_dir / 'privada.key')
+			self.wsfe.WSDL = "https://servicios1.afip.gov.ar/wsfev1/service.asmx?WSDL"
+			self.wsaa.WSDL = "https://wsaa.afip.gov.ar/ws/services/LoginCms?wsdl"
+			self.wsaa.WSAAURL = "https://wsaa.afip.gov.ar/ws/services/LoginCms"
+		else:
+			self.wsfe.Cuit = CUIT  = 20218452788
+			self.cert = str(cert_dir / 'empresa.crt')
+			self.key = str(cert_dir / 'privadatesting.key')
+			self.wsfe.WSDL = "https://wswhomo.afip.gov.ar/wsfev1/service.asmx?WSDL"
+			self.wsaa.WSDL = "https://wsaahomo.afip.gov.ar/ws/services/LoginCms?wsdl"
+			self.wsaa.WSAAURL = "https://wsaahomo.afip.gov.ar/ws/services/LoginCms"
 
-
-WSFEv1.Cuit = CUIT
-
-WSFEv1.WSDL = "https://servicios1.afip.gov.ar/wsfev1/service.asmx?WSDL"
-
-
-WSAa.WSDL = "https://wsaa.afip.gov.ar/ws/services/LoginCms?wsdl"
-WSAa.WSAAURL = "https://wsaa.afip.gov.ar/ws/services/LoginCms"
-
-
-try:
-	DATE = datetime.now().strftime("%Y%m%d")
-	DATE1 = datetime.now().strftime("%Y-%m-%d")
-except Exception as e:
-	CrearLogs(e)
-	exit()
-
-def conectar_servidor():
-	while True:
+	def get_db(self):
+		""" Retorna la conexión a DB, reconectando si es necesario """
 		try:
-			connection = mysql.connector.connect(
-				host='127.0.0.1',
-				port=3306,
-				user='root',
-				password='1234',
-				database='negocio',
-				connection_timeout=5,
-			)
-			connection.autocommit = False
-			connection.start_transaction(isolation_level='READ COMMITTED')
-			return(connection)
-			break
-		except Exception:
-			print('Conexion fallida, esperando reconexion')
-			time.sleep(120)
+			if self.db is None or not self.db.is_connected():
+				print("DB: Conectando...")
+				self.db = mysql.connector.connect(
+					host='192.168.0.142', password='ventas', user='ventas',
+					#host='127.0.0.1', port=3306, user='root', password='1234',
+					database='negocio', connection_timeout=5
+				)
+				self.db.autocommit = False
+				self.db.start_transaction(isolation_level='READ COMMITTED')
+				print("DB: Conectado correctamente.")
+			return self.db
+		except Exception as e:
+			CrearLogs(e)
+			return None
 
-connection = conectar_servidor()
-
-def conectar_afip():
-	while True:
+	def init_afip(self):
+		""" Inicializa el ticket de acceso AFIP """
 		try:
-			WSFEv1.Conectar()
-			WSFEv1.SetTicketAcceso(
-				WSAa.Autenticar("wsfe", CRT, KEY))
-			break
-		except Exception:
-			time.sleep(120)
+			print("AFIP: Conectando...")
+			self.wsfe.Conectar()
+			ticket = self.wsaa.Autenticar("wsfe", self.cert, self.key)
+			if ticket:
+				self.wsfe.SetTicketAcceso(ticket)
+				print("AFIP: Conectado y Autenticado.")
+				return True
+			return False
+		except Exception as e:
+			CrearLogs(e)
+			return False
 
-conectar_afip()
+manager = ConnectionManager()
+
 
 
 # ------- APP FLASK -------
@@ -118,24 +133,24 @@ def get_fecha():
 def get_last_voucher():
 	try:
 		tipo = int(request.json.get("tipo"))
-		ptoventa = request.json.get("ptoventa")
+		ptoventa = int(request.json.get("ptoventa"))
 		if tipo != 99:
 			try:
-				factura = WSFEv1.CompUltimoAutorizado(tipo, int(ptoventa))
+				factura = manager.wsfe.CompUltimoAutorizado(tipo, ptoventa)
 				return jsonify(int(factura) + 1)
 			except Exception as e:
-				print(e)
-			return jsonify(None)
+				CrearLogs(e)
+				return jsonify(None)
 		else:
-			connection.rollback() # Limpiar cache de transaccion
-			with connection.cursor(dictionary=True) as cursor:
-				qry = "SELECT Numero FROM negocio.numeracion WHERE PtoVenta LIKE '%s'" % ptoventa
+			db = manager.get_db()
+			with db.cursor(dictionary=True) as cursor:
+				qry = "SELECT Numero FROM negocio.numeracion WHERE PtoVenta LIKE '%s'" % str(ptoventa).zfill(4)
 				cursor.execute(qry)
 				row = cursor.fetchone()
 				return jsonify(int(row["Numero"]) + 1)
 	except Exception as e:
 		CrearLogs(e)
-		return jsonify([])  
+		return jsonify(None)
 
 @app.route("/getVoucher", methods=["POST"])
 def get_voucher():
@@ -145,7 +160,7 @@ def get_voucher():
 		getPtoventa = int(request.json.get("getPtoventa"))
 		radioSelect = int(request.json.get("radioSelect"))
 		try:
-			arr = WSFEv1.CompConsultar(Retext, getPtoventa, radioSelect)
+			arr = manager.wsfe.CompConsultar(Retext, getPtoventa, radioSelect)
 		except Exception as e:
 			print(e)
 		return jsonify(arr)
@@ -155,7 +170,8 @@ def get_voucher():
 
 
 def calculoTotal(Fecha, PtoVta): 
-	with connection.cursor(dictionary=True) as cursor:
+	db = manager.get_db()
+	with db.cursor(dictionary=True) as cursor:
 		Query = "SELECT SUM(Total) as Total FROM negocio.ventas INNER JOIN camioneta.clientes AS c \
 			ON ventas.Cuit = c.Cuit WHERE Fecha LIKE '%s' AND N_Fact LIKE '%s-%%' \
 			AND c.Duplicado NOT LIKE '1'" % (Fecha, PtoVta)
@@ -186,20 +202,21 @@ def calculoTotal(Fecha, PtoVta):
 @app.route("/facturacion", methods=["POST"])
 def facturacion():
 	try:
-		#arr = []
 		comp = ""
 
 		data_req = request.json
 		cliente = data_req["cliente"]
-		
 		if cliente[5] == 'EXENTO':
 			return jsonify({"error": "Exento error"})
-			
+		
 		Cuitcliente = cliente[0].replace("-", "")
 		total = float(data_req["total"])
 		tipo = int(data_req["tipo"])
 		NroFact = int(data_req["NroFact"])
-		NroFactD = int(data_req["NroFactD"])
+		if data_req.get("NroFactD") != '':
+			NroFactD = int(data_req["NroFactD"])
+		else:
+			NroFactD = ''
 		PtoVta = int(data_req["ptoventa"])
 		items = data_req["items"]
 		itemsC = data_req["itemsC"]
@@ -208,24 +225,29 @@ def facturacion():
 
 		# Calculos de neto e iva
 		neto = round(total / 1.21, 2)
-		iva = round(total - neto, 2)
+		iva = '{:.2f}'.format(round(total - neto, 2))
+		neto = '{:.2f}'.format(neto)
+		total = '{:.2f}'.format(total)
 
-		# Generamos el CAE
-		cae, cae_vto, comp, err, obs = generarCAE(
-			Cuitcliente, tipo, NroFact, NroFactD, 
-			date, PtoVta, total, neto, iva
-		)
-		if cae == "NO":
+	# Generamos el CAE
+		try:
+			cae, cae_vto, comp, err, obs = generarCAE(
+				Cuitcliente, tipo, NroFact, NroFactD, 
+				DATE, PtoVta, total, neto, iva
+			)
+		except Exception as e:
+			CrearLogs(e)
 			return jsonify({"error": "CAE error"})
 
-		
 		# Guardamos en la base de datos
 		if not InsertFacturaBD(DATE, comp, formatfact, cliente, neto, iva, total, tipo, items, itemsC):
 			return jsonify({"error": "BD error"})
 
 		
 		# Generamos el QR para la factura
-		cuerpo = f'{{"ver":1,"fecha":"{DATE}","cuit":{CUIT},"ptoVta":{PtoVta},"tipoCmp":{tipo},"nroCmp":{NroFact},"importe":{int(total)},"moneda":"PES","ctz":1,"tipoDocRec":80,"nroDocRec":{int(Cuitcliente)},"tipoCodAut":"E","codAut":{cae}}}'
+		FormatTotal = total.replace('.','')
+
+		cuerpo = f'{{"ver":1,"fecha":"{DATE1}","cuit":{CUIT},"ptoVta":{PtoVta},"tipoCmp":{tipo},"nroCmp":{NroFact},"importe":{FormatTotal},"moneda":"PES","ctz":1,"tipoDocRec":80,"nroDocRec":{int(Cuitcliente)},"tipoCodAut":"E","codAut":{cae}}}'
 		to_qrurl = URL_QR + "?p=" + base64.b64encode(cuerpo.encode()).decode()
 		
 		qr_obj = qrcode.QRCode(
@@ -243,7 +265,6 @@ def facturacion():
 		qr_base64 = base64.b64encode(buf.getvalue()).decode()
 
 		fecha_vto = f"{cae_vto[6:8]}/{cae_vto[4:6]}/{cae_vto[0:4]}"
-		#arr = [qr_base64, cae, fecha_vto, neto, iva]
 		
 		return jsonify({"error": None, "qr_base64": qr_base64, "cae": cae, "fecha_vto": fecha_vto, "neto": neto, "iva": iva})
 	except Exception as e:
@@ -252,33 +273,29 @@ def facturacion():
 
 def generarCAE(Cuitcliente, tipo, NroFact, NroFactD, 
 	date, PtoVta, total, neto, iva):
-	try:
-		WSFEv1.CrearFactura(
+		manager.wsfe.CrearFactura(
 			concepto=1, tipo_doc=80, nro_doc=Cuitcliente, tipo_cbte=tipo,
 			cbt_desde=NroFact , cbt_hasta=NroFact, fecha_cbte=date,
 			punto_vta=PtoVta, cbte_nro=NroFact, imp_total=total, imp_tot_conc=0.00, 
 			imp_neto=neto, imp_iva=iva, condicion_iva_receptor_id=1
 		)
-		WSFEv1.AgregarIva(5, neto, iva)  # 21%
+		manager.wsfe.AgregarIva(5, neto, iva)  # 21%
 
 		if tipo == 3:
-			
 			comp = "Ncred. A"
-			WSFEv1.AgregarCmpAsoc(pto_vta=PtoVta, nro=NroFactD)
+			manager.wsfe.AgregarCmpAsoc(pto_vta=PtoVta, nro=NroFactD)
 		else:
 			comp = "Fact.A"
 
-		cae = WSFEv1.CAESolicitar()
-		cae_vto = WSFEv1.Vencimiento
-		return [cae, cae_vto, comp, WSFEv1.ErrMsg, WSFEv1.Obs]
-	except Exception as e:
-		CrearLogs(e)
-		return ["NO", "", "", "", ""]
+		cae = manager.wsfe.CAESolicitar()
+		cae_vto = manager.wsfe.Vencimiento
+		return [cae, cae_vto, comp, manager.wsfe.ErrMsg, manager.wsfe.Obs]
 
 def InsertFacturaBD(date, comp, formatfact, cliente, 
 	neto, iva, total, tipo, items, itemsC):
 	try:
-		with connection.cursor(dictionary=True) as cursor:
+		db = manager.get_db()
+		with db.cursor(dictionary=True) as cursor:
 			if tipo == 3:
 				#Nota de credito
 				qry = f"""INSERT INTO ventas (Fecha, Comprobante, N_fact, Cuit, Pan105, Pan21, Exento, Iva105, Iva21, Otros, Total)
@@ -306,10 +323,11 @@ def InsertFacturaBD(date, comp, formatfact, cliente,
 				if c_item[0] not in nombres_en_venta:
 					cursor.execute(f"""INSERT INTO venta_productos (N_fact, Comprobante, Producto, Cantidad, Precio_U, Cambio, Total)
 									VALUES ('{formatfact}', '{comp}', '{c_item[0]}', '0', '{c_item[2]}', '{c_item[1]}', '0.00');""")
-			connection.commit()
+			db.commit()
 			return True
 	except:
-		connection.rollback()
+		db.rollback()
+		CrearLogs(e)
 		return False
 
 # --------------
@@ -343,7 +361,8 @@ def presupuesto():
 
 def InsertPresupuestoBD(cliente, PtoVta, fact, N_Presu, Total, items, itemsC):
 	try:
-		with connection.cursor(dictionary=True) as cursor:
+		db = manager.get_db()
+		with db.cursor(dictionary=True) as cursor:
 			try:
 				Query = "INSERT INTO negocio.presupuestos(Fecha, Cuit, N_Presu, Total) \
 				VALUES ('%s', '%s', '%s', '%s');" % (DATE, cliente[0], fact, Total)
@@ -376,10 +395,10 @@ def InsertPresupuestoBD(cliente, PtoVta, fact, N_Presu, Total, items, itemsC):
 				Query = "UPDATE negocio.numeracion SET Numero = '%s' WHERE PtoVenta = '%s';" % (N_Presu, str(PtoVta).zfill(4))
 				cursor.execute(Query)
 
-				connection.commit()
+				db.commit()
 				return True
 			except Exception as e:
-				connection.rollback()
+				db.rollback()
 				CrearLogs(e)
 				if "Duplicate entry" in str(e) or (hasattr(e, 'errno') and e.errno == 1062):
 					return False
@@ -409,16 +428,17 @@ def cambios():
 
 def InsertCambios(itemsC, cliente, date):
 	try:
-		with connection.cursor(dictionary=True) as cursor:
+		db = manager.get_db()
+		with db.cursor(dictionary=True) as cursor:
 			for i in range(len(itemsC)):
 				Query = "INSERT INTO negocio.cambio_sin_ventas(Fecha, Cuit, Producto, Cantidad)\
 					VALUES ('%s', '%s', '%s', '%s');" % (date, cliente[0], itemsC[i][0], itemsC[i][1])
 				cursor.execute(Query)
-			connection.commit()
+			db.commit()
 		return True
 	except Exception as e:
 		CrearLogs(e)
-		connection.rollback()
+		db.rollback()
 		return False
 
 # --------------
@@ -429,7 +449,8 @@ def lista_precios():
 	try:
 		arr = []
 		lista = request.json.get('lista')
-		with connection.cursor(dictionary=True) as cursor:
+		db = manager.get_db()
+		with db.cursor(dictionary=True) as cursor:
 			qry = "SELECT Nombre, Precio FROM camioneta.productos WHERE Lista LIKE '%s' AND Precio NOT LIKE '0.0%%'" % lista
 			cursor.execute(qry)
 			rows = cursor.fetchall()
@@ -447,7 +468,10 @@ def rankingFact():
 	try:
 		PtoVta = request.json.get('PtoVta')
 		Fecha = request.json.get('Fecha')
-		with connection.cursor(dictionary=True) as cursor:
+		db = manager.get_db()
+		
+		with db.cursor(dictionary=True) as cursor:
+			db.rollback()
 			Query = "SELECT SUBSTRING(c.RazonS,1,26), Comprobante,N_fact,Total FROM negocio.ventas as v INNER JOIN negocio.clientes as c \
 				ON v.Cuit = c.Cuit WHERE Fecha LIKE '%s' AND v.N_fact LIKE '%s-%%'\
 				ORDER BY Fecha DESC" % (Fecha, PtoVta)
@@ -476,7 +500,9 @@ def getStockInfo():
 		PtoVenta = request.json.get('PtoVenta')
 		Tabla1, Tabla2, Tabla3, Tabla4, Tabla5, Tabla6, Tabla7 = [], [], [], [], [], [], []
 		
-		with connection.cursor(dictionary=True) as cursor:
+		db = manager.get_db()
+		with db.cursor(dictionary=True) as cursor:
+			db.rollback()
 			Query = "SELECT Accion, Nombre, SUM(Cantidad) as Cantidad FROM negocio.stock_camioneta\
 				WHERE Fecha LIKE '%s' GROUP BY Accion, Nombre" % (Fecha)
 			cursor.execute(Query)
@@ -575,7 +601,8 @@ def getStockInfo():
 @app.route('/getProductosNegocio', methods=['GET'])
 def getProductosNegocio():
 	try:
-		with connection.cursor(dictionary=True) as cursor:
+		db = manager.get_db()
+		with db.cursor(dictionary=True) as cursor:
 			qry = "SELECT Nombre FROM camioneta.productos WHERE Nombre LIKE '%%' AND Precio NOT LIKE '0.00%' GROUP BY Nombre"
 			cursor.execute(qry)
 			rows = cursor.fetchall()
@@ -595,16 +622,17 @@ def postProductosNegocio():
 		Productos = request.json.get('Productos')
 		Tipo = request.json.get('Tipo')
 		
-		with connection.cursor(dictionary=True) as cursor:
+		db = manager.get_db()
+		with db.cursor(dictionary=True) as cursor:
 			for row in Productos:
 				query = "INSERT INTO negocio.stock_camioneta (Fecha, Accion, Nombre, Cantidad)\
 					VALUES ('%s', '%s', '%s', '%s')" % (DATE1, Tipo, row['nombre'], row['cantidad'])
 				cursor.execute(query)
-			connection.commit()
+			db.commit()
 		return jsonify({'error': None})
 	except Exception as e:
 		CrearLogs(e)
-		connection.rollback()
+		db.rollback()
 		return jsonify({'error': 'Error al insertar los datos'})
 
 # --------------
@@ -612,7 +640,8 @@ def postProductosNegocio():
 @app.route('/searchInicio', methods=['GET'])
 def searchInicio():
 	try:
-		with connection.cursor(dictionary=True, buffered=True) as cursor:
+		db = manager.get_db()
+		with db.cursor(dictionary=True, buffered=True) as cursor:
 			query = "SELECT * FROM negocio.stock_camioneta WHERE Fecha LIKE '%s' AND Accion = '0'" % (DATE1)
 			cursor.execute(query)
 			rows = cursor.fetchone()
@@ -629,7 +658,8 @@ def searchInicio():
 @app.route('/searchFabrica', methods=['GET'])
 def searchFabrica():
 	try:
-		with connection.cursor(dictionary=True) as cursor:
+		db = manager.get_db()
+		with db.cursor(dictionary=True) as cursor:
 			query = "SELECT * FROM negocio.stock_camioneta WHERE Fecha LIKE '%s' AND Accion = '1'" % (DATE1)
 			cursor.execute(query)
 			rows = cursor.fetchall()
@@ -643,7 +673,8 @@ def searchFabrica():
 @app.route('/searchNegocio', methods=['GET'])
 def searchNegocio():
 	try:
-		with connection.cursor(dictionary=True) as cursor:
+		db = manager.get_db()
+		with db.cursor(dictionary=True) as cursor:
 			query = "SELECT * FROM negocio.stock_camioneta WHERE Fecha LIKE '%s' AND Accion = '2'" % (DATE1)
 			cursor.execute(query)
 			rows = cursor.fetchall()
@@ -661,17 +692,19 @@ def reimprimir():
 		pto = request.json.get('pto')
 		tipo = request.json.get('tipo')
 
-		WSFEv1.CompConsultar(tipo, pto, nro)
+		manager.wsfe.CompConsultar(tipo, pto, nro)
 
-		cae = WSFEv1.CAE
-		vto = WSFEv1.Vencimiento[-2:] + '/' + WSFEv1.Vencimiento[-4:-2] + '/' + WSFEv1.Vencimiento[:4]
+		cae = manager.wsfe.CAE
+		vto = manager.wsfe.Vencimiento[-2:] + '/' + manager.wsfe.Vencimiento[-4:-2] + '/' + manager.wsfe.Vencimiento[:4]
 
 		if tipo == 1:
 			tipo = 'Fact.A'
 		else:
 			tipo = 'Ncred. A'
-						
-		with connection.cursor(dictionary=True) as cursor:
+
+		db = manager.get_db()			
+		with db.cursor(dictionary=True) as cursor:
+			db.rollback()
 			qry = "SELECT * FROM negocio.ventas WHERE N_fact LIKE '%s-%s' AND Comprobante LIKE '%s'" % (pto.zfill(4), nro.zfill(8), tipo)
 			cursor.execute(qry)
 			rowF = cursor.fetchone()
@@ -732,12 +765,79 @@ def reimprimir():
 		CrearLogs(e)
 		return jsonify({'error': 'Error interno del servidor'})
 
+@app.route('/reImprimirPres', methods=['POST'])
+def reImprimirPres():
+	try:
+		nro = request.json.get('nro')
+		pto = request.json.get('pto')
+
+		db = manager.get_db()
+		with db.cursor(dictionary=True) as cursor:
+			qry = "SELECT * FROM negocio.presupuestos WHERE N_Presu LIKE '%s-%s'" % (pto.zfill(4), nro.zfill(8))
+			cursor.execute(qry)
+			rowF = cursor.fetchone()
+
+			if rowF:
+				cliente = "SELECT * FROM camioneta.clientes WHERE Cuit LIKE '%s'" % rowF['Cuit']
+				cursor.execute(cliente)
+				cliente = cursor.fetchone()
+
+				productos = "SELECT * FROM negocio.presu_productos WHERE N_pres LIKE '%s-%s' " % (pto.zfill(4), nro.zfill(8))
+				cursor.execute(productos)
+				productos = cursor.fetchall()
+			else:
+				return jsonify({'error': 'Vacio'})
+		
+		arrC = [cliente["RazonS"], cliente["Cuit"]]
+		arrP = []
+
+		Fecha = rowF['Fecha'].strftime("%d/%m/%Y")
+
+		arrF = [Fecha, rowF['N_Presu'], rowF['Total']]
+		
+		for row in productos:
+			arrP.append([
+				row["Producto"],
+				row["Cantidad"],
+				row["Precio_U"],
+				row["Total"]
+			])
+		
+		return jsonify(arrC, arrP, arrF)
+
+	except Exception as e:
+		CrearLogs(e)
+		return jsonify({'error': 'Error interno del servidor'})
+# --------------
+
+@app.route('/eliminarPresupuesto', methods=['POST'])
+def eliminar_presupuesto():
+	db = None
+	try:
+		nro = request.json.get('nro')
+		pto = request.json.get('pto')
+		fact = f"{str(pto).zfill(4)}-{str(nro).zfill(8)}"
+
+		db = manager.get_db()
+		with db.cursor(dictionary=True) as cursor:
+			#cursor.execute("DELETE FROM negocio.presu_productos WHERE N_pres = %s", (fact,))
+			cursor.execute("DELETE FROM negocio.presupuestos WHERE N_Presu = %s", (fact,))
+			db.commit()
+		return jsonify({'error': None})
+	except Exception as e:
+		CrearLogs(e)
+		if db:
+			db.rollback()
+		return jsonify({'error': 'Error al eliminar el presupuesto'})
+
 # --------------
 
 @app.route('/buscarCliente', methods=['GET'])
 def buscar_cliente():
 	try:
-		with connection.cursor(dictionary=True) as cursor:
+		db = manager.get_db()
+		with db.cursor(dictionary=True) as cursor:
+			db.rollback()
 			qry = """
 				SELECT RazonS, Alias, Cuit, Direccion, Responsabilidad, Lista,
 					Descuento, Recargo, Duplicado
@@ -774,7 +874,8 @@ def buscar_cliente():
 @app.route('/buscarProductos', methods=['GET'])
 def buscar_productos():
 	try:
-		with connection.cursor(dictionary=True) as cursor:
+		db = manager.get_db()
+		with db.cursor(dictionary=True) as cursor:
 			qry = "SELECT Nombre, Lista, Precio, Iva FROM camioneta.productos ORDER BY Nombre"
 			cursor.execute(qry)
 			rows = cursor.fetchall()
@@ -796,6 +897,65 @@ def buscar_productos():
 
 
 
+
+@app.route('/getProductosStock', methods=['GET'])
+def getProductosStock():
+	try:
+		db = manager.get_db()
+		db.rollback()
+		with db.cursor(dictionary=True) as cursor:
+			qry = "SELECT Barcode, Nombre, Imagen, Cantidad, Categoria, Medida FROM negocio.productostock ORDER BY Nombre"
+			cursor.execute(qry)
+			rows = cursor.fetchall()
+			arr = []
+			for row in rows:
+				arr.append([
+					row["Barcode"],
+					row["Nombre"],
+					row["Imagen"],
+					row["Cantidad"],
+					row["Categoria"],
+					row["Medida"],
+				])
+
+		return jsonify({'error': None, 'items': arr})
+	except Exception as e:
+		CrearLogs(e)
+		return jsonify({'error': 'Error interno del servidor'})
+
+
+@app.route('/descontarStock', methods=['POST'])
+def descontarStock():
+	try:
+		id = request.json.get('id')
+		cantidad = request.json.get('cantidad')
+		print(id, cantidad)
+		db = manager.get_db()
+		with db.cursor(dictionary=True) as cursor:
+			qry = "UPDATE negocio.productostock SET Cantidad = %s WHERE Barcode = '%s'" % (cantidad, id)
+			cursor.execute(qry)
+			db.commit()
+			return jsonify({'error': None})
+	except:
+		return jsonify({'error': 'Error'})
+
+
+
+
 if __name__ == "__main__":
-	#app.run(host='0.0.0.0', port=5000, debug=True) #Para testing
-	serve(app, host='0.0.0.0', port=5000) #Para produccion
+	#while True:
+	try:
+		print(f"[{datetime.now().strftime('%H:%M:%S')}] Iniciando conexión...")
+		manager.get_db()
+		manager.init_afip()
+		app.run(host='0.0.0.0', port=5000, debug=True) #Para testing
+		#serve(app, host='0.0.0.0', port=5000) #Para produccion
+	except KeyboardInterrupt:
+		print("\nServidor detenido manualmente por el usuario.")
+		#break
+	except Exception as e:
+		print(f"[{datetime.now().strftime('%H:%M:%S')}] Error crítico en el servidor: {e}")
+		CrearLogs(e)
+		print("Reiniciando servidor en 5 segundos...")
+		time.sleep(5)
+

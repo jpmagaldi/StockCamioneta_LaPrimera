@@ -147,7 +147,10 @@ export default function Ranking({ navigation, route }) {
         <Surface style={styles.tableSurface} elevation={1}>
             <View style={styles.sectionHeader}>
                 <Icon source={icono} size={24} color="#9A1115" />
-                <Text variant="titleMedium" style={styles.sectionTitle} maxFontSizeMultiplier={1.2}>{titulo}</Text>
+                <View style={{ flex: 1 }}>
+                    <Text variant="titleMedium" style={styles.sectionTitle} maxFontSizeMultiplier={1.2}>{titulo}</Text>
+                    <Text variant="bodySmall" style={{ color: '#888', fontStyle: 'italic', marginTop: 2 }} maxFontSizeMultiplier={1.2}>Deslice la tabla hacia la izquierda para ver los cambios</Text>
+                </View>
             </View>
             
             <ScrollView horizontal={true} showsHorizontalScrollIndicator={true}>

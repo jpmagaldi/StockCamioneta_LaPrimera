@@ -2,7 +2,7 @@ import { MMKVLoader} from "react-native-mmkv-storage";
 
 import axios from "axios";
 
-const puerto = '5000'
+const puerto = '5001'
 
 
 
@@ -16,5 +16,8 @@ export const useStore = new MMKVLoader().initialize();
 export const apiClient =  axios.create({
     baseURL: `http://${useStore.getString('useIp') || ''}:${puerto}`, // URL base para todas las solicitudes
     timeout: 5000, // Tiempo de espera predeterminado (en milisegundos)
-    headers: {'Content-Type': 'application/json;charset=utf-8'}
+    headers: {
+      'Content-Type': 'application/json;charset=utf-8',
+      'X-API-Key': 'MGTGuXnT8VNcpVgtKtsuzb2MijdaorJJUzu5rl5O2bTZcz3vHrhsulKaKlhXdINyegpcSSpY8qb33QzUgKrlioWZDgukvdrFXHqxnnlENtIxbyl3vxnwtqm02Qk4cwvP'
+    }
   })
