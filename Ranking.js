@@ -158,7 +158,7 @@ export default function Ranking({ navigation, route }) {
                     <DataTable style={[styles.table, { width: availableWidth * 1.3 }]}>
                         <DataTable.Header style={styles.tableHeader}>
                             <DataTable.Title style={styles.widthComp}>
-                                <Text style={styles.headerText} maxFontSizeMultiplier={1.2}>Producto.</Text>
+                                <Text style={styles.headerText} maxFontSizeMultiplier={1.2}>Producto</Text>
                             </DataTable.Title>
                             <DataTable.Title style={styles.widthTotalV}>
                                 <Text style={styles.headerText} maxFontSizeMultiplier={1.2}>Cantidad</Text>

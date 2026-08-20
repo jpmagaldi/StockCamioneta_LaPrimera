@@ -2,7 +2,7 @@ import { MMKVLoader} from "react-native-mmkv-storage";
 
 import axios from "axios";
 
-const puerto = '5001'
+const puerto = '5000'
 
 
 
